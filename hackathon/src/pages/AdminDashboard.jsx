@@ -10,12 +10,13 @@ export function AdminDashboard() {
   const [users, setUsers] = useState([])
   const [quests, setQuests] = useState([])
   const [assignments, setAssignments] = useState([])
+  const [submissions, setSubmissions] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [success, setSuccess] = useState(null)
 
   // Active tab
-  const [activeTab, setActiveTab] = useState('quests')
+  const [activeTab, setActiveTab] = useState('submissions')
 
   // Create/Edit quest form
   const [questForm, setQuestForm] = useState({ id: null, title: '', description: '', points: 10 })
@@ -48,10 +49,11 @@ export function AdminDashboard() {
       setError(null)
 
       try {
-        const [usersResult, questsResult, assignmentsResult] = await Promise.all([
+        const [usersResult, questsResult, assignmentsResult, submissionsResult] = await Promise.all([
           supabase.from('user_details').select('*').order('created_at', { ascending: false }),
           supabase.from('quests').select('*').order('created_at', { ascending: false }),
           supabase.from('quest_assignments').select('*, quests(id,title,points)').order('assigned_at', { ascending: false }),
+          supabase.from('quest_submissions').select('*, user_details(user_id, name, username), quests(id, title, points)').order('submitted_at', { ascending: false }),
         ])
 
         if (cancelled) return
@@ -59,10 +61,12 @@ export function AdminDashboard() {
         if (usersResult.error) console.error('Users error:', usersResult.error)
         if (questsResult.error) console.error('Quests error:', questsResult.error)
         if (assignmentsResult.error) console.error('Assignments error:', assignmentsResult.error)
+        if (submissionsResult.error) console.error('Submissions error:', submissionsResult.error)
 
         setUsers(usersResult.data || [])
         setQuests(questsResult.data || [])
         setAssignments(assignmentsResult.data || [])
+        setSubmissions(submissionsResult.data || [])
       } catch (err) {
         console.error('Load error:', err)
         if (!cancelled) setError(err.message)
@@ -78,14 +82,16 @@ export function AdminDashboard() {
 
   // Reload data helper
   async function reloadData() {
-    const [usersResult, questsResult, assignmentsResult] = await Promise.all([
+    const [usersResult, questsResult, assignmentsResult, submissionsResult] = await Promise.all([
       supabase.from('user_details').select('*').order('created_at', { ascending: false }),
       supabase.from('quests').select('*').order('created_at', { ascending: false }),
       supabase.from('quest_assignments').select('*, quests(id,title,points)').order('assigned_at', { ascending: false }),
+      supabase.from('quest_submissions').select('*, user_details(user_id, name, username), quests(id, title, points)').order('submitted_at', { ascending: false }),
     ])
     setUsers(usersResult.data || [])
     setQuests(questsResult.data || [])
     setAssignments(assignmentsResult.data || [])
+    setSubmissions(submissionsResult.data || [])
   }
 
   // Clear messages after 3 seconds
@@ -284,6 +290,91 @@ export function AdminDashboard() {
     setSuccess('Assignment deleted!')
   }
 
+  // ============ SUBMISSION APPROVAL ============
+
+  async function approveSubmission(submission) {
+    setError(null)
+
+    const adminUser = users.find((u) => u.auth_id === user?.id)
+
+    // Update submission status
+    const { error: updateErr } = await supabase
+      .from('quest_submissions')
+      .update({
+        status: 'approved',
+        reviewed_at: new Date().toISOString(),
+        reviewed_by: adminUser?.user_id || null,
+      })
+      .eq('id', submission.id)
+
+    if (updateErr) {
+      setError(updateErr.message)
+      return
+    }
+
+    // Create community post from the submission
+    const { error: postError } = await supabase
+      .from('community_page')
+      .insert({
+        user_id: submission.user_id,
+        quest_id: submission.quest_id,
+        post_title: submission.post_title,
+        post_caption: submission.post_caption,
+        image_url: submission.image_url,
+        number_of_likes: 0,
+        created_at: new Date().toISOString().split('T')[0]
+      })
+
+    if (postError) {
+      console.error('Error creating community post:', postError)
+    }
+
+    // Update user's points
+    const userDetail = users.find((u) => u.user_id === submission.user_id)
+    if (userDetail && submission.quests?.points) {
+      await supabase
+        .from('user_details')
+        .update({
+          points: (userDetail.points || 0) + submission.quests.points,
+          total_points_earned: (userDetail.total_points_earned || 0) + submission.quests.points,
+          quest_completed: (userDetail.quest_completed || 0) + 1,
+        })
+        .eq('user_id', userDetail.user_id)
+    }
+
+    // Update local state
+    setSubmissions((prev) =>
+      prev.map((s) => (s.id === submission.id ? { ...s, status: 'approved' } : s))
+    )
+    setSuccess('Submission approved! Points awarded and post created.')
+  }
+
+  async function rejectSubmission(submissionId, reason = '') {
+    setError(null)
+
+    const adminUser = users.find((u) => u.auth_id === user?.id)
+
+    const { error: updateErr } = await supabase
+      .from('quest_submissions')
+      .update({
+        status: 'rejected',
+        reviewed_at: new Date().toISOString(),
+        reviewed_by: adminUser?.user_id || null,
+        rejection_reason: reason || 'Submission did not meet requirements',
+      })
+      .eq('id', submissionId)
+
+    if (updateErr) {
+      setError(updateErr.message)
+      return
+    }
+
+    setSubmissions((prev) =>
+      prev.map((s) => (s.id === submissionId ? { ...s, status: 'rejected' } : s))
+    )
+    setSuccess('Submission rejected.')
+  }
+
   // ============ RENDER ============
 
   const tabStyle = (tab) => ({
@@ -316,6 +407,9 @@ export function AdminDashboard() {
 
       {/* Tabs */}
       <nav style={{ borderBottom: '1px solid #ddd', marginTop: 24 }}>
+        <button style={tabStyle('submissions')} onClick={() => setActiveTab('submissions')}>
+          Submissions ({submissions.filter(s => s.status === 'pending').length} pending)
+        </button>
         <button style={tabStyle('quests')} onClick={() => setActiveTab('quests')}>
           Quests ({quests.length})
         </button>
@@ -331,6 +425,135 @@ export function AdminDashboard() {
       </nav>
 
       {loading && <div style={{ padding: 20 }}>Loading...</div>}
+
+      {/* ============ SUBMISSIONS TAB ============ */}
+      {!loading && activeTab === 'submissions' && (
+        <div style={{ marginTop: 20 }}>
+          <h2>Quest Submissions</h2>
+          <p style={{ color: '#666', marginBottom: 20 }}>Review and approve student quest completions.</p>
+
+          {submissions.length === 0 ? (
+            <div style={{ padding: 40, textAlign: 'center', background: '#f9f9f9', borderRadius: 12, color: '#888' }}>
+              No submissions yet.
+            </div>
+          ) : (
+            <div style={{ display: 'grid', gap: 16 }}>
+              {/* Pending Submissions */}
+              {submissions.filter(s => s.status === 'pending').length > 0 && (
+                <>
+                  <h3 style={{ color: '#f80', marginTop: 8, marginBottom: 4 }}>Pending Approval ({submissions.filter(s => s.status === 'pending').length})</h3>
+                  {submissions.filter(s => s.status === 'pending').map((sub) => (
+                    <div key={sub.id} style={{ border: '2px solid #f80', borderRadius: 12, padding: 16, background: '#fffaf5' }}>
+                      <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
+                        {sub.image_url && (
+                          <img 
+                            src={sub.image_url} 
+                            alt="Submission proof" 
+                            style={{ width: 120, height: 120, objectFit: 'cover', borderRadius: 8 }}
+                          />
+                        )}
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 4 }}>{sub.post_title}</div>
+                          <div style={{ color: '#666', fontSize: 14, marginBottom: 8 }}>
+                            by <b>{sub.user_details?.name || sub.user_details?.username || 'Unknown'}</b> • 
+                            Quest: <b>{sub.quests?.title}</b> • 
+                            +{sub.quests?.points || 0} pts
+                          </div>
+                          {sub.post_caption && (
+                            <div style={{ color: '#555', fontSize: 14, marginBottom: 8, fontStyle: 'italic' }}>
+                              "{sub.post_caption}"
+                            </div>
+                          )}
+                          <div style={{ fontSize: 12, color: '#999' }}>
+                            Submitted: {new Date(sub.submitted_at).toLocaleString()}
+                          </div>
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                          <button
+                            onClick={() => approveSubmission(sub)}
+                            style={{
+                              padding: '10px 20px',
+                              background: '#22c55e',
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: 8,
+                              cursor: 'pointer',
+                              fontWeight: 600,
+                            }}
+                          >
+                            ✓ Approve
+                          </button>
+                          <button
+                            onClick={() => {
+                              const reason = prompt('Reason for rejection (optional):')
+                              rejectSubmission(sub.id, reason)
+                            }}
+                            style={{
+                              padding: '10px 20px',
+                              background: '#ef4444',
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: 8,
+                              cursor: 'pointer',
+                              fontWeight: 600,
+                            }}
+                          >
+                            ✗ Reject
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </>
+              )}
+
+              {/* Approved Submissions */}
+              {submissions.filter(s => s.status === 'approved').length > 0 && (
+                <>
+                  <h3 style={{ color: '#22c55e', marginTop: 20, marginBottom: 4 }}>Approved ({submissions.filter(s => s.status === 'approved').length})</h3>
+                  {submissions.filter(s => s.status === 'approved').map((sub) => (
+                    <div key={sub.id} style={{ border: '1px solid #22c55e', borderRadius: 12, padding: 16, background: '#f0fdf4' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div>
+                          <div style={{ fontWeight: 600 }}>{sub.post_title}</div>
+                          <div style={{ fontSize: 14, color: '#666' }}>
+                            {sub.user_details?.name || 'Unknown'} • {sub.quests?.title} • +{sub.quests?.points || 0} pts
+                          </div>
+                        </div>
+                        <span style={{ padding: '4px 12px', background: '#dcfce7', color: '#22c55e', borderRadius: 12, fontSize: 12, fontWeight: 600 }}>
+                          ✓ Approved
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </>
+              )}
+
+              {/* Rejected Submissions */}
+              {submissions.filter(s => s.status === 'rejected').length > 0 && (
+                <>
+                  <h3 style={{ color: '#ef4444', marginTop: 20, marginBottom: 4 }}>Rejected ({submissions.filter(s => s.status === 'rejected').length})</h3>
+                  {submissions.filter(s => s.status === 'rejected').map((sub) => (
+                    <div key={sub.id} style={{ border: '1px solid #ef4444', borderRadius: 12, padding: 16, background: '#fef2f2' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div>
+                          <div style={{ fontWeight: 600 }}>{sub.post_title}</div>
+                          <div style={{ fontSize: 14, color: '#666' }}>
+                            {sub.user_details?.name || 'Unknown'} • {sub.quests?.title}
+                          </div>
+                        </div>
+                        <span style={{ padding: '4px 12px', background: '#fee2e2', color: '#ef4444', borderRadius: 12, fontSize: 12, fontWeight: 600 }}>
+                          ✗ Rejected
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ============ QUESTS TAB ============ */}
       {!loading && activeTab === 'quests' && (

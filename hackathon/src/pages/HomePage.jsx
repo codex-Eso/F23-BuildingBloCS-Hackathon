@@ -5,13 +5,16 @@ import { useNavigate } from 'react-router-dom';
 import '../css/HomePage.css';
 
 const HomePage = () => {
-    const { user } = useAuth();
+    const { user, signOut } = useAuth();
     const navigate = useNavigate();
     const [userPoints, setUserPoints] = useState(0);
     const [userId, setUserId] = useState(null);
     const [quests, setQuests] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
+    
+    // Track user's quest submissions
+    const [userSubmissions, setUserSubmissions] = useState([]);
     
     // Modal state for quest completion
     const [showCompletionModal, setShowCompletionModal] = useState(false);
@@ -23,6 +26,12 @@ const HomePage = () => {
     // Image upload state
     const [selectedImage, setSelectedImage] = useState(null);
     const [imagePreview, setImagePreview] = useState(null);
+
+    // Handle logout
+    const handleLogout = async () => {
+        await signOut();
+        navigate('/login');
+    };
 
     // Fetch user details (points and user_id)
     useEffect(() => {
@@ -40,6 +49,18 @@ const HomePage = () => {
             } else if (data) {
                 setUserPoints(data.points || 0);
                 setUserId(data.user_id);
+                
+                // Fetch user's quest submissions
+                const { data: submissions, error: subError } = await supabase
+                    .from('quest_submissions')
+                    .select('quest_id, status')
+                    .eq('user_id', data.user_id);
+                
+                if (subError) {
+                    console.error('Error fetching submissions:', subError);
+                } else {
+                    setUserSubmissions(submissions || []);
+                }
             }
         };
 
@@ -160,38 +181,28 @@ const HomePage = () => {
                 imageUrl = urlData.publicUrl;
             }
             
-            // Insert community post
-            const { error: postError } = await supabase
-                .from('community_page')
+            // Create pending submission for admin approval
+            const { error: submissionError } = await supabase
+                .from('quest_submissions')
                 .insert({
                     user_id: userId,
                     quest_id: selectedQuest.id,
                     post_title: postTitle,
                     post_caption: postCaption || null,
                     image_url: imageUrl,
-                    number_of_likes: 0,
-                    created_at: new Date().toISOString().split('T')[0]
+                    status: 'pending',
+                    submitted_at: new Date().toISOString()
                 });
             
-            if (postError) {
-                console.error('Error creating post:', postError);
-                alert('Failed to share your completion. Please try again.');
+            if (submissionError) {
+                console.error('Error creating submission:', submissionError);
+                alert('Failed to submit quest. Please try again.');
                 setSubmitting(false);
                 return;
             }
             
-            // Update user points
-            const newPoints = userPoints + selectedQuest.points;
-            const { error: pointsError } = await supabase
-                .from('user_details')
-                .update({ points: newPoints })
-                .eq('user_id', userId);
-            
-            if (pointsError) {
-                console.error('Error updating points:', pointsError);
-            } else {
-                setUserPoints(newPoints);
-            }
+            // Update local state to reflect the pending submission
+            setUserSubmissions(prev => [...prev, { quest_id: selectedQuest.id, status: 'pending' }]);
             
             // Close modal and reset
             setShowCompletionModal(false);
@@ -200,8 +211,8 @@ const HomePage = () => {
             setPostCaption('');
             handleRemoveImage();
             
-            // Navigate to community page to see the post
-            navigate('/community');
+            // Show success message
+            alert('Quest submitted for approval! You will earn points once an admin approves your submission.');
             
         } catch (err) {
             console.error('Unexpected error:', err);
@@ -217,6 +228,27 @@ const HomePage = () => {
         { id: 'redeem', label: 'Redeem', icon: 'gift', path: '/redeem' },
         { id: 'profile', label: 'Profile', icon: 'person', path: '/profile' }
     ];
+
+    // Helper to get submission status for a quest
+    const getQuestSubmissionStatus = (questId) => {
+        const submission = userSubmissions.find(s => s.quest_id === questId);
+        return submission?.status || null;
+    };
+
+    // Get button text and disabled state based on submission status
+    const getQuestButtonState = (questId) => {
+        const status = getQuestSubmissionStatus(questId);
+        switch (status) {
+            case 'pending':
+                return { text: 'Pending Approval', disabled: true, className: 'pending' };
+            case 'approved':
+                return { text: 'Completed ✓', disabled: true, className: 'completed' };
+            case 'rejected':
+                return { text: 'Rejected - Try Again', disabled: false, className: 'rejected' };
+            default:
+                return { text: 'Start Quest', disabled: false, className: '' };
+        }
+    };
 
     const renderTabIcon = (iconType) => {
         switch (iconType) {
@@ -315,6 +347,14 @@ const HomePage = () => {
                             <circle cx="12" cy="7" r="4" />
                         </svg>
                     </div>
+                    <button className="logout-btn" onClick={handleLogout}>
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                            <polyline points="16 17 21 12 16 7" />
+                            <line x1="21" y1="12" x2="9" y2="12" />
+                        </svg>
+                        <span>Logout</span>
+                    </button>
                 </div>
             </header>
 
@@ -389,12 +429,18 @@ const HomePage = () => {
                                             </div>
                                         </div>
                                         <p className="quest-description">{quest.description}</p>
-                                        <button 
-                                            className="start-quest-btn"
-                                            onClick={() => handleStartQuest(quest)}
-                                        >
-                                            Start Quest
-                                        </button>
+                                        {(() => {
+                                            const buttonState = getQuestButtonState(quest.id);
+                                            return (
+                                                <button 
+                                                    className={`start-quest-btn ${buttonState.className}`}
+                                                    onClick={() => handleStartQuest(quest)}
+                                                    disabled={buttonState.disabled}
+                                                >
+                                                    {buttonState.text}
+                                                </button>
+                                            );
+                                        })()}
                                     </div>
                                 ))}
                             </div>

@@ -62,6 +62,25 @@
     cursor: pointer;
 }
 
+.logout-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    background-color: #fee2e2;
+    border: none;
+    border-radius: 20px;
+    font-size: 14px;
+    font-weight: 500;
+    color: #dc2626;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.logout-btn:hover {
+    background-color: #fecaca;
+}
+
 /* Navigation Tabs */
 .nav-tabs {
     display: flex;
@@ -242,8 +261,32 @@
     transition: background-color 0.2s ease;
 }
 
-.start-quest-btn:hover {
+.start-quest-btn:hover:not(:disabled) {
     background-color: #2563eb;
+}
+
+.start-quest-btn:disabled {
+    cursor: not-allowed;
+    opacity: 0.9;
+}
+
+.start-quest-btn.pending {
+    background-color: #f59e0b;
+    color: white;
+}
+
+.start-quest-btn.completed {
+    background-color: #22c55e;
+    color: white;
+}
+
+.start-quest-btn.rejected {
+    background-color: #ef4444;
+    color: white;
+}
+
+.start-quest-btn.rejected:hover {
+    background-color: #dc2626;
 }
 
 /* Placeholder Content for other tabs */

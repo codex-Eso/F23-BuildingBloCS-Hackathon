@@ -27,7 +27,7 @@ export function SignUp() {
     }
     
     // Student -> student dashboard
-    navigate('/app', { replace: true })
+    navigate('/HomePage', { replace: true })
   }, [session, role, loading, navigate])
 
   async function onSubmit(e) {
@@ -76,7 +76,7 @@ export function SignUp() {
 
       if (data.session) {
         await refreshRole()
-        navigate('/app', { replace: true })
+        navigate('/HomePage', { replace: true })
       } else {
         setInfo('Check your email to confirm your account, then log in via Student Login.')
       }

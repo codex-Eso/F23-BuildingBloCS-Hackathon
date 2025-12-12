@@ -8,11 +8,11 @@ import { Login } from './pages/Login.jsx'
 import { SignUp } from './pages/SignUp.jsx'
 import { AdminLogin } from './pages/AdminLogin.jsx'
 import { AdminSignUp } from './pages/AdminSignUp.jsx'
-import { UserDashboard } from './pages/UserDashboard.jsx'
 import { AdminDashboard } from './pages/AdminDashboard.jsx'
 import { NotFound } from './pages/NotFound.jsx'
 import HomePage from './pages/HomePage.jsx'
 import CommunityPage from './pages/CommunityPage.jsx'
+
 
 function App() {
   return (
@@ -20,7 +20,6 @@ function App() {
       <Routes>
         {/* Home redirects based on role */}
         <Route path="/Homepage" element={<HomePage />} />
-        <Route path="/community" element={<CommunityPage />} />
         <Route path="/" element={<RoleRedirect />} />
         <Route path="/login" element={<Login />} />
         <Route path="/signup" element={<SignUp />} />
@@ -32,7 +31,16 @@ function App() {
           path="/app"
           element={
             <ProtectedRoute>
-              <UserDashboard />
+              <HomePage />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/community"
+          element={
+            <ProtectedRoute>
+              <CommunityPage />
             </ProtectedRoute>
           }
         />
