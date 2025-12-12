@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
-  "homepage": "https://github.com/codex-Eso/BuildingBloCS-Hackathon/",
+  "homepage": "https://codex-eso.github.io/BuildingBloCS-Hackathon/",
   "scripts": {
     "predeploy": "npm run build",
     "deploy": "gh-pages -d dist",
