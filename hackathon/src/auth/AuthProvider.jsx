@@ -105,6 +105,23 @@ export function AuthProvider({ children }) {
     }
   }, [])
 
+  const signOut = useCallback(async () => {
+    try {
+      // Use 'local' scope to only clear local session without server call
+      // This prevents 403 errors when session is already invalid
+      const { error } = await supabase.auth.signOut({ scope: 'local' })
+      if (error) {
+        console.warn('Sign out warning:', error.message)
+      }
+    } catch (err) {
+      console.warn('Sign out error:', err)
+    }
+    // Clear local state regardless of server response
+    setSession(null)
+    setUser(null)
+    setRole(null)
+  }, [])
+
   const value = useMemo(
     () => ({
       session,
@@ -112,10 +129,10 @@ export function AuthProvider({ children }) {
       role,
       loading,
       isAdmin: role === 'admin',
-      signOut: () => supabase.auth.signOut(),
+      signOut,
       refreshRole,
     }),
-    [session, user, role, loading, refreshRole],
+    [session, user, role, loading, signOut, refreshRole],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
