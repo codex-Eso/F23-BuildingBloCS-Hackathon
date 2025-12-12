@@ -331,6 +331,7 @@ export function AdminDashboard() {
 
     if (postError) {
       console.error('Error creating community post:', postError)
+      setError('Submission approved but failed to create community post: ' + postError.message)
     }
 
     // Update user's points
