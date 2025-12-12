@@ -53,7 +53,7 @@ export function AdminDashboard() {
           supabase.from('user_details').select('*').order('created_at', { ascending: false }),
           supabase.from('quests').select('*').order('created_at', { ascending: false }),
           supabase.from('quest_assignments').select('*, quests(id,title,points)').order('assigned_at', { ascending: false }),
-          supabase.from('quest_submissions').select('*, user_details(user_id, name, username), quests(id, title, points)').order('submitted_at', { ascending: false }),
+          supabase.from('quest_submissions').select('*, user_details!quest_submissions_user_id_fkey(user_id, name, username), quests(id, title, points)').order('submitted_at', { ascending: false }),
         ])
 
         if (cancelled) return
@@ -62,6 +62,10 @@ export function AdminDashboard() {
         if (questsResult.error) console.error('Quests error:', questsResult.error)
         if (assignmentsResult.error) console.error('Assignments error:', assignmentsResult.error)
         if (submissionsResult.error) console.error('Submissions error:', submissionsResult.error)
+        
+        // Debug: Log submissions data
+        console.log('Submissions fetched:', submissionsResult.data)
+        console.log('Submissions count:', submissionsResult.data?.length || 0)
 
         setUsers(usersResult.data || [])
         setQuests(questsResult.data || [])
@@ -86,7 +90,7 @@ export function AdminDashboard() {
       supabase.from('user_details').select('*').order('created_at', { ascending: false }),
       supabase.from('quests').select('*').order('created_at', { ascending: false }),
       supabase.from('quest_assignments').select('*, quests(id,title,points)').order('assigned_at', { ascending: false }),
-      supabase.from('quest_submissions').select('*, user_details(user_id, name, username), quests(id, title, points)').order('submitted_at', { ascending: false }),
+      supabase.from('quest_submissions').select('*, user_details!quest_submissions_user_id_fkey(user_id, name, username), quests(id, title, points)').order('submitted_at', { ascending: false }),
     ])
     setUsers(usersResult.data || [])
     setQuests(questsResult.data || [])
