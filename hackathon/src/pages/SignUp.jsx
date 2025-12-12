@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../SupaBase.js'
 import { useAuth } from '../auth/useAuth.js'
+import { SITE_URL } from '../siteConfig.js'
 import '../css/AuthPages.css'
 
 export function SignUp() {
@@ -41,7 +42,7 @@ export function SignUp() {
       email,
       password,
       options: {
-        emailRedirectTo: `${window.location.origin}/auth/callback`,
+        emailRedirectTo: `${SITE_URL}/auth/callback`,
         data: {
           full_name: fullName.trim() || null,
           role: 'user',
@@ -188,5 +189,3 @@ export function SignUp() {
     </div>
   )
 }
-
-
