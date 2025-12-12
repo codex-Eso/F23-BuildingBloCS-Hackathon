@@ -3,6 +3,18 @@ import { supabase } from '../SupaBase.js';
 import { useAuth } from '../auth/useAuth.js';
 import { useNavigate } from 'react-router-dom';
 import '../css/RedeemPage.css';
+import GlobalReforestation from '../assets/global_reforestation.png';
+import OceanConservation from '../assets/ocean_conservation.png';
+import RenewableEnergy from '../assets/renewable_energy.png';
+import WildlifeProtection from '../assets/wildlife_protection.png';
+
+// Map charity names to their images (must match database names exactly)
+const charityImages = {
+    'Global Reforestation Project': GlobalReforestation,
+    'Ocean Conservation Fund': OceanConservation,
+    'Renewable Energy Initiative': RenewableEnergy,
+    'Wildlife Protection Alliance': WildlifeProtection,
+};
 
 const RedeemPage = () => {
     const { user, signOut } = useAuth();
@@ -314,10 +326,13 @@ const RedeemPage = () => {
                                     
                                     return (
                                         <div key={charity.id} className="charity-card">
-                                            <div 
-                                                className="charity-image"
-                                                style={{ background: getCharityGradient(index) }}
-                                            />
+                                            <div className="charity-image-container">
+                                                <img 
+                                                    src={charityImages[charity.name] || GlobalReforestation} 
+                                                    alt={charity.name}
+                                                    className="charity-image"
+                                                />
+                                            </div>
                                             <div className="charity-info">
                                                 <h4 className="charity-name">{charity.name}</h4>
                                                 <p className="charity-description">{charity.description}</p>
