@@ -342,14 +342,20 @@ export function AdminDashboard() {
 
     // Update user's points - fetch fresh data to avoid stale values
     if (submission.quests?.points) {
-      const { data: freshUserData } = await supabase
+      const { data: freshUserData, error: fetchErr } = await supabase
         .from('user_details')
         .select('user_id, points, total_points_earned, quest_completed')
         .eq('user_id', submission.user_id)
         .single()
 
+      if (fetchErr) {
+        console.error('Error fetching user data for points update:', fetchErr)
+        setError('Approved but failed to fetch user data: ' + fetchErr.message)
+        return
+      }
+
       if (freshUserData) {
-        await supabase
+        const { error: pointsErr } = await supabase
           .from('user_details')
           .update({
             points: (freshUserData.points || 0) + submission.quests.points,
@@ -357,6 +363,12 @@ export function AdminDashboard() {
             quest_completed: (freshUserData.quest_completed || 0) + 1,
           })
           .eq('user_id', freshUserData.user_id)
+
+        if (pointsErr) {
+          console.error('Error updating user points:', pointsErr)
+          setError('Approved but failed to award points: ' + pointsErr.message)
+          return
+        }
       }
     }
 
